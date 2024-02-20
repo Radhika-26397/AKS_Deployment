@@ -1,0 +1,45 @@
+name: Deploy Sample Application to AKS
+ 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+ 
+    - name: Login to ACR
+      run: az acr login --name ${{ vars.ACR_REPO }} --username ${{ vars.ACR_REPO_USERNAME }} --password ${{ vars.ACR_REPO_PASSWORD }}
+
+    # - name: Set image tag dynamically
+    #   id: set-tag
+    #   run: echo "::set-output name=TAG::v$(date +'%Y%m%d_%H%M%S')"
+
+    - name: Build and Push Docker Images
+      # env:
+      #   TAG: ${{ steps.set-tag.outputs.TAG }}
+        
+      run: |
+        #echo $TAG
+        docker build -t aks-deployment:latest .
+        docker tag aks-deployment:latest acraksdeployment.azurecr.io/aks-deployment:latest
+        docker push acraksdeployment.azurecr.io/aks-deployment:latest
+        
+    - name: Login and Deploy to AKS
+      uses: azure/CLI@v1
+      with:
+        azcliversion: latest
+        inlineScript: |
+          az login
+          az account set --subscription ${{ vars.AKS_SUBSCRIPTION_ID }}
+          az aks get-credentials --resource-group rg-aks-deployment-centralindia-01 --name aks-deployment-centralindia-01
+          az aks install-cli
+          kubectl version --client
+          kubectl apply -f aks-deploy.yml
+          kubectl apply -f aks-svc.yml
